@@ -18,7 +18,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
-        this.singboxVersion = singboxVersion;  // '1.11', '1.12', or '1.13'
+        this.singboxVersion = singboxVersion;  // '1.11' or '1.12'
 
         if (this.config?.dns?.servers?.length > 0) {
             this.config.dns.servers[0].detour = this.t('outboundNames.Node Select');
@@ -26,22 +26,14 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
     }
 
     /**
-     * Check if the current sing-box version supports outbound_providers
-     * Only available in Sing-Box 1.12 (removed in 1.13+)
-     * @returns {boolean}
-     */
-    supportsProviders() {
-        return this.singboxVersion === '1.12';
-    }
-
-    /**
      * Check if subscription format is compatible for use as Sing-Box outbound_provider
-     * Only available in Sing-Box 1.12 (removed in 1.13+)
+     * Only available in Sing-Box 1.12+
      * @param {'clash'|'singbox'|'unknown'} format - Detected subscription format
      * @returns {boolean} - True if format is Sing-Box JSON and version supports providers
      */
     isCompatibleProviderFormat(format) {
-        if (!this.supportsProviders()) {
+        // outbound_providers only supported in Sing-Box 1.12+
+        if (this.singboxVersion === '1.13') {
             return false;
         }
         return format === 'singbox';
@@ -79,7 +71,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
      * @returns {string[]} - Array of provider tags
      */
     getAllProviderTags() {
-        if (!this.supportsProviders()) {
+        if (this.singboxVersion === '1.13') {
             return [];
         }
         const existingTags = Array.isArray(this.config.outbound_providers)
@@ -427,8 +419,8 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
 
         this.config.route.rule_set = [...site_rule_sets, ...ip_rule_sets];
 
-        // Add outbound_providers if we have any (only for sing-box 1.12)
-        if (this.supportsProviders() && this.providerUrls.length > 0) {
+        // Add outbound_providers if we have any
+        if (this.providerUrls.length > 0) {
             const existingProviders = Array.isArray(this.config.outbound_providers) ? this.config.outbound_providers : [];
             const newProviders = this.generateOutboundProviders();
             this.config.outbound_providers = [...existingProviders, ...newProviders];
