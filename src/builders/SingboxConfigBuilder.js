@@ -140,6 +140,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
 
     addAutoSelectGroup(proxyList) {
         if (!this.includeAutoSelect) return;
+        if (!proxyList || proxyList.length === 0) return;  // Don't create empty group
         this.config.outbounds = this.config.outbounds || [];
         const tag = this.t('outboundNames.Auto Select');
         if (this.hasOutboundTag(tag)) return;
