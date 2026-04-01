@@ -18,7 +18,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
-        this.singboxVersion = singboxVersion;  // '1.11' or '1.12'
+        this.singboxVersion = singboxVersion;  // '1.11', '1.12', or '1.13'
 
         if (this.config?.dns?.servers?.length > 0) {
             this.config.dns.servers[0].detour = this.t('outboundNames.Node Select');
@@ -26,14 +26,22 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
     }
 
     /**
+     * Check if the current sing-box version supports outbound_providers
+     * Only available in Sing-Box 1.12 (removed in 1.13+)
+     * @returns {boolean}
+     */
+    supportsProviders() {
+        return this.singboxVersion === '1.12';
+    }
+
+    /**
      * Check if subscription format is compatible for use as Sing-Box outbound_provider
-     * Only available in Sing-Box 1.12+
+     * Only available in Sing-Box 1.12 (removed in 1.13+)
      * @param {'clash'|'singbox'|'unknown'} format - Detected subscription format
      * @returns {boolean} - True if format is Sing-Box JSON and version supports providers
      */
     isCompatibleProviderFormat(format) {
-        // outbound_providers only supported in Sing-Box 1.12+
-        if (this.singboxVersion === '1.11') {
+        if (!this.supportsProviders()) {
             return false;
         }
         return format === 'singbox';
@@ -71,7 +79,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
      * @returns {string[]} - Array of provider tags
      */
     getAllProviderTags() {
-        if (this.singboxVersion === '1.11') {
+        if (!this.supportsProviders()) {
             return [];
         }
         const existingTags = Array.isArray(this.config.outbound_providers)
@@ -150,6 +158,12 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             outbounds: deepCopy(uniqueNames(proxyList))
         };
 
+        // Add 'providers' field if we have outbound_providers
+        const providerTags = this.getAllProviderTags();
+        if (providerTags.length > 0) {
+            group.providers = providerTags;
+        }
+
         this.config.outbounds.unshift(group);
     }
 
@@ -171,6 +185,12 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             tag,
             outbounds: members
         };
+
+        // Add 'providers' field if we have outbound_providers
+        const providerTags = this.getAllProviderTags();
+        if (providerTags.length > 0) {
+            group.providers = providerTags;
+        }
 
         this.config.outbounds.unshift(group);
     }
@@ -302,6 +322,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
 
         const proxyList = this.getProxyList();
         const validProxyTags = new Set(proxyList);
+        const allProviderTags = new Set(this.getAllProviderTags());
 
         // Build valid reference set (proxy tags, group tags, special names)
         const groupTags = new Set(
@@ -325,6 +346,15 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             if (existingIndex >= 0) {
                 // Merge with existing system group
                 const existing = this.config.outbounds[existingIndex];
+
+                // Merge 'providers' field (Sing-Box uses 'providers' not 'use')
+                if (Array.isArray(userGroup.use) && userGroup.use.length > 0) {
+                    const validUserProviders = userGroup.use.filter(p => allProviderTags.has(p));
+                    existing.providers = [...new Set([
+                        ...(existing.providers || []),
+                        ...validUserProviders
+                    ])];
+                }
 
                 // Merge 'outbounds' field (equivalent to Clash 'proxies')
                 if (Array.isArray(userGroup.proxies) && userGroup.proxies.length > 0) {
@@ -352,8 +382,16 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
                     newOutbound.outbounds = userGroup.proxies.filter(p => validRefs.has(p));
                 }
 
-                // Only add if has valid outbounds
-                if (newOutbound.outbounds?.length > 0) {
+                // Validate providers references
+                if (Array.isArray(userGroup.use)) {
+                    const validProviders = userGroup.use.filter(p => allProviderTags.has(p));
+                    if (validProviders.length > 0) {
+                        newOutbound.providers = validProviders;
+                    }
+                }
+
+                // Only add if has valid outbounds or providers
+                if ((newOutbound.outbounds?.length > 0) || (newOutbound.providers?.length > 0)) {
                     this.config.outbounds.push(newOutbound);
                 }
             }
@@ -366,13 +404,19 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
      */
     validateOutbounds() {
         const proxyList = this.getProxyList();
+        const providerTags = this.getAllProviderTags();
 
         (this.config.outbounds || []).forEach(outbound => {
-            // For urltest groups, ensure they have outbounds
+            // For urltest groups, ensure they have outbounds or providers
             if (outbound.type === 'urltest' &&
-                (!outbound.outbounds || outbound.outbounds.length === 0)) {
+                (!outbound.outbounds || outbound.outbounds.length === 0) &&
+                (!outbound.providers || outbound.providers.length === 0)) {
                 // Fill with all available proxy tags
                 outbound.outbounds = [...proxyList];
+                // Also use all providers if available
+                if (providerTags.length > 0) {
+                    outbound.providers = [...providerTags];
+                }
             }
         });
     }
@@ -382,6 +426,13 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         const { site_rule_sets, ip_rule_sets } = generateRuleSets(this.selectedRules, this.customRules);
 
         this.config.route.rule_set = [...site_rule_sets, ...ip_rule_sets];
+
+        // Add outbound_providers if we have any (only for sing-box 1.12)
+        if (this.supportsProviders() && this.providerUrls.length > 0) {
+            const existingProviders = Array.isArray(this.config.outbound_providers) ? this.config.outbound_providers : [];
+            const newProviders = this.generateOutboundProviders();
+            this.config.outbound_providers = [...existingProviders, ...newProviders];
+        }
 
         // Validate outbounds: fill empty urltest groups with all proxies
         this.validateOutbounds();
