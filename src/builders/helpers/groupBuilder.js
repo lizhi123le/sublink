@@ -26,16 +26,14 @@ export function buildNodeSelectMembers({ proxyList = [], translator, groupByCoun
         throw new Error('buildNodeSelectMembers requires a translator function');
     }
     const autoName = translator('outboundNames.Auto Select');
-    // Only include Auto Select if there are proxies (Auto Select group is only created when proxyList is not empty)
-    const shouldIncludeAutoSelect = includeAutoSelect && proxyList.length > 0;
     const base = groupByCountry
         ? [
-            ...(shouldIncludeAutoSelect ? [autoName] : []),
+            ...(includeAutoSelect ? [autoName] : []),
             ...(manualGroupName ? [manualGroupName] : []),
             ...countryGroupNames
         ]
         : [
-            ...(shouldIncludeAutoSelect ? [autoName] : []),
+            ...(includeAutoSelect ? [autoName] : []),
             ...proxyList
         ];
     return withDirectReject(base);
@@ -45,13 +43,10 @@ export function buildSelectorMembers({ proxyList = [], translator, groupByCountr
     if (!translator) {
         throw new Error('buildSelectorMembers requires a translator function');
     }
-    const autoName = translator('outboundNames.Auto Select');
-    // Only include Auto Select if there are proxies (Auto Select group is only created when proxyList is not empty)
-    const shouldIncludeAutoSelect = includeAutoSelect && proxyList.length > 0;
     const base = groupByCountry
         ? [
             translator('outboundNames.Node Select'),
-            ...(shouldIncludeAutoSelect ? [autoName] : []),
+            ...(includeAutoSelect ? [translator('outboundNames.Auto Select')] : []),
             ...(manualGroupName ? [manualGroupName] : []),
             ...countryGroupNames
         ]
