@@ -454,14 +454,32 @@ function isSingboxLegacyConfig(version) {
     return version.minor < 12;
 }
 
+/**
+ * Check if a parsed version is sing-box 1.13+
+ * In 1.13, outbound_providers and the providers field in outbounds were removed.
+ * @param {{major: number, minor: number, patch: number}} version
+ * @returns {boolean}
+ */
+function isSingboxV1_13Plus(version) {
+    if (!version || Number.isNaN(version.major) || Number.isNaN(version.minor)) {
+        return false;
+    }
+    if (version.major !== 1) {
+        return version.major > 1;
+    }
+    return version.minor >= 13;
+}
+
 function resolveSingboxConfigVersion(requestedVersion, userAgent) {
     const normalizedRequested = typeof requestedVersion === 'string' ? requestedVersion.trim().toLowerCase() : '';
     if (normalizedRequested && normalizedRequested !== 'auto') {
         if (normalizedRequested === 'legacy') return '1.11';
-        if (normalizedRequested === 'latest') return '1.12';
+        if (normalizedRequested === 'latest') return '1.13';
         const parsed = parseSemverLike(normalizedRequested);
         if (parsed) {
-            return isSingboxLegacyConfig(parsed) ? '1.11' : '1.12';
+            if (isSingboxLegacyConfig(parsed)) return '1.11';
+            if (isSingboxV1_13Plus(parsed)) return '1.13';
+            return '1.12';
         }
     }
 
@@ -470,11 +488,13 @@ function resolveSingboxConfigVersion(requestedVersion, userAgent) {
         const versionString = uaMatch?.[1];
         const parsed = versionString ? parseSemverLike(versionString) : null;
         if (parsed) {
-            return isSingboxLegacyConfig(parsed) ? '1.11' : '1.12';
+            if (isSingboxLegacyConfig(parsed)) return '1.11';
+            if (isSingboxV1_13Plus(parsed)) return '1.13';
+            return '1.12';
         }
     }
 
-    return '1.12';
+    return '1.13';
 }
 
 function getRequestHeader(request, name) {
