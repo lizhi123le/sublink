@@ -430,6 +430,19 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         // Validate outbounds: fill empty urltest groups with all proxies
         this.validateOutbounds();
 
+        // Sing-box 1.13+ Compatibility: scrub 'providers' from all outbounds
+        (this.config.outbounds || []).forEach(outbound => {
+            if (outbound.providers !== undefined) {
+                if (Array.isArray(outbound.providers)) {
+                    outbound.outbounds = [...new Set([
+                        ...(outbound.outbounds || []),
+                        ...outbound.providers
+                    ])];
+                }
+                delete outbound.providers;
+            }
+        });
+
         const attachProtocolIfNeeded = (entry, rule) => {
             if (Array.isArray(rule?.protocol) && rule.protocol.length > 0) {
                 entry.protocol = rule.protocol;
