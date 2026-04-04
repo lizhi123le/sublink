@@ -33,7 +33,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
      */
     isCompatibleProviderFormat(format) {
         // outbound_providers only supported in Sing-Box 1.12+
-        if (this.singboxVersion === '1.13') {
+        if (this.singboxVersion === '1.11') {
             return false;
         }
         return format === 'singbox';
@@ -71,7 +71,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
      * @returns {string[]} - Array of provider tags
      */
     getAllProviderTags() {
-        if (this.singboxVersion === '1.13') {
+        if (this.singboxVersion === '1.11') {
             return [];
         }
         const existingTags = Array.isArray(this.config.outbound_providers)
@@ -150,10 +150,10 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             outbounds: deepCopy(uniqueNames(proxyList))
         };
 
-        // Add 'providers' field if we have outbound_providers
+        // Merge provider tags into outbounds for Sing-box 1.13 compatibility
         const providerTags = this.getAllProviderTags();
         if (providerTags.length > 0) {
-            group.providers = providerTags;
+            group.outbounds.push(...providerTags);
         }
 
         this.config.outbounds.unshift(group);
@@ -178,10 +178,10 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             outbounds: members
         };
 
-        // Add 'providers' field if we have outbound_providers
+        // Merge provider tags into outbounds for Sing-box 1.13 compatibility
         const providerTags = this.getAllProviderTags();
         if (providerTags.length > 0) {
-            group.providers = providerTags;
+            group.outbounds.push(...providerTags);
         }
 
         this.config.outbounds.unshift(group);
@@ -339,11 +339,12 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
                 // Merge with existing system group
                 const existing = this.config.outbounds[existingIndex];
 
-                // Merge 'providers' field (Sing-Box uses 'providers' not 'use')
+                // Merge user-defined providers directly into outbounds
+                // (Sing-Box 1.13 removed the separate 'providers' field)
                 if (Array.isArray(userGroup.use) && userGroup.use.length > 0) {
                     const validUserProviders = userGroup.use.filter(p => allProviderTags.has(p));
-                    existing.providers = [...new Set([
-                        ...(existing.providers || []),
+                    existing.outbounds = [...new Set([
+                        ...(existing.outbounds || []),
                         ...validUserProviders
                     ])];
                 }
@@ -374,16 +375,16 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
                     newOutbound.outbounds = userGroup.proxies.filter(p => validRefs.has(p));
                 }
 
-                // Validate providers references
+                // Validate providers references and append to outbounds (for Sing-Box 1.13)
                 if (Array.isArray(userGroup.use)) {
                     const validProviders = userGroup.use.filter(p => allProviderTags.has(p));
                     if (validProviders.length > 0) {
-                        newOutbound.providers = validProviders;
+                        newOutbound.outbounds = [...(newOutbound.outbounds || []), ...validProviders];
                     }
                 }
 
-                // Only add if has valid outbounds or providers
-                if ((newOutbound.outbounds?.length > 0) || (newOutbound.providers?.length > 0)) {
+                // Only add if has valid outbounds
+                if (newOutbound.outbounds?.length > 0) {
                     this.config.outbounds.push(newOutbound);
                 }
             }
@@ -399,15 +400,15 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         const providerTags = this.getAllProviderTags();
 
         (this.config.outbounds || []).forEach(outbound => {
-            // For urltest groups, ensure they have outbounds or providers
+            // For urltest groups, ensure they have outbounds
             if (outbound.type === 'urltest' &&
-                (!outbound.outbounds || outbound.outbounds.length === 0) &&
-                (!outbound.providers || outbound.providers.length === 0)) {
+                (!outbound.outbounds || outbound.outbounds.length === 0)) {
+                
                 // Fill with all available proxy tags
                 outbound.outbounds = [...proxyList];
-                // Also use all providers if available
+                // Also assign all providers if available
                 if (providerTags.length > 0) {
-                    outbound.providers = [...providerTags];
+                    outbound.outbounds.push(...providerTags);
                 }
             }
         });
