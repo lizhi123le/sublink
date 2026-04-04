@@ -133,9 +133,9 @@ describe('Auto Proxy Providers Detection', () => {
             expect(config.outbound_providers[0].download_url).toBe('https://example.com/singbox-sub?token=xxx');
             expect(config.outbound_providers[0].type).toBe('http');
 
-            // outbounds should have 'providers' field
-            const nodeSelect = config.outbounds.find(o => o.tag === '🚀 节点选择');
-            expect(nodeSelect.providers).toContain('_auto_provider_1');
+            // outbounds should incorporate providers (Sing-Box 1.13+)
+            const nodeSelect = config.outbounds.find(o => o.tag === translator('outboundNames.Node Select'));
+            expect(nodeSelect.outbounds).toContain('_auto_provider_1');
         });
 
         it('should parse and convert Clash URL (incompatible format)', async () => {
@@ -301,9 +301,9 @@ describe('Auto Proxy Providers Detection', () => {
             expect(config.outbound_providers.map(p => p.tag)).toContain('user-provider');
             expect(config.outbound_providers.map(p => p.tag)).toContain('_auto_provider_1');
 
-            const nodeSelect = config.outbounds.find(o => o.tag === '🚀 节点选择');
-            expect(nodeSelect.providers).toContain('user-provider');
-            expect(nodeSelect.providers).toContain('_auto_provider_1');
+            const nodeSelect = config.outbounds.find(o => o.tag === translator('outboundNames.Node Select'));
+            expect(nodeSelect.outbounds).toContain('user-provider');
+            expect(nodeSelect.outbounds).toContain('_auto_provider_1');
         });
     });
 });
